@@ -2,6 +2,7 @@ from airflow import DAG
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from datetime import datetime
 import os
 import pandas as pd
@@ -15,6 +16,14 @@ with DAG(
 ) as dag:    
 
     start = EmptyOperator(task_id="start")
+
+    create_bronze_schema = SQLExecuteQueryOperator(
+    task_id="create_bronze_schema",
+    conn_id="postgres",
+    sql="""
+        CREATE SCHEMA IF NOT EXISTS bronze;
+    """
+    )
 
     def etl_out_of_school():
         csv_path = os.path.join(os.path.dirname(__file__), '/opt/airflow', 'landingzone', 'out_of_school_children.csv')
@@ -63,7 +72,6 @@ with DAG(
             if_exists="append",
             index=False,
         )
-    
 
     etl_out_of_school = PythonOperator(
         task_id="etl_out_of_school",
@@ -77,4 +85,4 @@ with DAG(
 
     end = EmptyOperator(task_id="end")
 
-    start >> [etl_out_of_school, etl_population_with_least_basic_education] >> end
+    start >> create_bronze_schema >> [etl_out_of_school, etl_population_with_least_basic_education] >> end
